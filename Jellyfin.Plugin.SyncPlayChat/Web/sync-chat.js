@@ -176,6 +176,9 @@
     function setChatButtonIcon(button) {
         const iconElement = button.querySelector('span, i');
         if (iconElement) {
+            iconElement.classList.remove('fullscreen');
+            iconElement.classList.remove('hide');
+            iconElement.classList.add('chat');
             iconElement.textContent = 'chat';
             iconElement.setAttribute('aria-hidden', 'true');
             return;
@@ -189,6 +192,7 @@
         button.id = buttonId;
         button.type = 'button';
         button.classList.remove('btnFullscreen');
+        button.classList.remove('hide');
         button.classList.remove(markerClass);
         button.classList.add(markerClass);
         if (!button.classList.contains('emby-button')) {
@@ -203,6 +207,7 @@
         button.removeAttribute('is');
         setChatButtonIcon(button);
         button.style.display = 'inline-flex';
+        button.style.setProperty('display', 'inline-flex', 'important');
         button.style.alignItems = 'center';
         button.style.justifyContent = 'center';
         button.style.flex = '0 0 auto';
@@ -847,7 +852,7 @@
 
         const classNames = [];
         fullscreenButton.classList.forEach(function (className) {
-            if (className !== 'btnFullscreen' && className !== markerClass) {
+            if (className !== 'btnFullscreen' && className !== markerClass && className !== 'hide') {
                 classNames.push(className);
             }
         });
@@ -858,6 +863,7 @@
 
         classNames.push(markerClass);
         button.className = classNames.join(' ');
+        button.style.setProperty('display', 'inline-flex', 'important');
         setChatButtonIcon(button);
     }
 
