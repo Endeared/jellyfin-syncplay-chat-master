@@ -106,16 +106,7 @@
 
         const shouldAdjustBody = chatPanelVisible && !isMobileViewport();
         document.body.classList.toggle('syncPlayChatSidebarOpen', shouldAdjustBody);
-        if (shouldAdjustBody && !bodyLayoutAdjusted) {
-            originalBodyPaddingRight = document.body.style.paddingRight || '';
-            baseBodyPaddingRight = window.getComputedStyle(document.body).paddingRight || '0px';
-            bodyLayoutAdjusted = true;
-        }
-
-        if (shouldAdjustBody) {
-            document.body.style.boxSizing = 'border-box';
-            document.body.style.paddingRight = 'calc(' + baseBodyPaddingRight + ' + ' + sidebarWidthPx + 'px)';
-        } else if (bodyLayoutAdjusted) {
+        if (!shouldAdjustBody && bodyLayoutAdjusted) {
             document.body.style.paddingRight = originalBodyPaddingRight;
             bodyLayoutAdjusted = false;
         }
@@ -135,9 +126,6 @@
         style.id = 'syncPlayChatSidebarLayoutStyles';
         style.textContent = [
             'body.syncPlayChatSidebarOpen { overflow-x: hidden !important; }',
-            'body.syncPlayChatSidebarOpen > *:not(#syncPlayChatPanel):not(#syncPlayChatFloatingHost):not(script):not(style) {',
-            '    max-width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
-            '}',
             'body.syncPlayChatSidebarOpen .skinHeader,',
             'body.syncPlayChatSidebarOpen .mainAnimatedPages,',
             'body.syncPlayChatSidebarOpen .page,',
@@ -152,23 +140,18 @@
             'body.syncPlayChatSidebarOpen .nowPlayingBar,',
             'body.syncPlayChatSidebarOpen .backgroundContainer,',
             'body.syncPlayChatSidebarOpen .backdropContainer {',
-            '    width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
-            '    max-width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
-            '}',
-            'body.syncPlayChatSidebarOpen .skinHeader,',
-            'body.syncPlayChatSidebarOpen .videoPlayerContainer,',
-            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"],',
-            'body.syncPlayChatSidebarOpen .htmlvideoplayer,',
-            'body.syncPlayChatSidebarOpen .videoOsdTop,',
-            'body.syncPlayChatSidebarOpen .videoOsdBottom,',
-            'body.syncPlayChatSidebarOpen .osdHeader,',
-            'body.syncPlayChatSidebarOpen .osdControls,',
-            'body.syncPlayChatSidebarOpen .nowPlayingBar {',
-            '    right: ' + sidebarWidthPx + 'px !important;',
+            '    left: 0 !important;',
+            '    right: auto !important;',
+            '    width: calc(100vw - ' + sidebarWidthPx + 'px) !important;',
+            '    max-width: calc(100vw - ' + sidebarWidthPx + 'px) !important;',
+            '    margin-left: 0 !important;',
+            '    margin-right: 0 !important;',
             '}',
             'body.syncPlayChatSidebarOpen .videoPlayerContainer video,',
-            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"] video {',
-            '    max-width: calc(100vw - ' + sidebarWidthPx + 'px) !important;',
+            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"] video,',
+            'body.syncPlayChatSidebarOpen .htmlvideoplayer video {',
+            '    width: 100% !important;',
+            '    max-width: 100% !important;',
             '}'
         ].join('\n');
         document.head.appendChild(style);
