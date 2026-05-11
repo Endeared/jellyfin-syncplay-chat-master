@@ -195,12 +195,15 @@
     function applyFloatingHostLayout(host) {
         const mobile = isMobileViewport();
         host.style.flexDirection = 'column';
-        host.style.top = mobile ? '0.75rem' : 'auto';
+        host.style.top = mobile
+            ? (chatPanelVisible ? 'calc(45vh + 0.75rem)' : '0.75rem')
+            : '50%';
         host.style.right = mobile || !chatPanelVisible ? '1rem' : 'calc(1rem + ' + sidebarWidthPx + 'px)';
-        host.style.bottom = mobile ? 'auto' : '1rem';
+        host.style.bottom = 'auto';
         host.style.left = mobile ? '1rem' : 'auto';
         host.style.alignItems = mobile ? 'stretch' : 'flex-end';
         host.style.maxWidth = mobile ? 'none' : 'calc(100vw - 2rem)';
+        host.style.transform = mobile ? 'none' : 'translateY(-50%)';
 
         const panel = document.getElementById(panelId);
         if (panel) {
@@ -924,79 +927,29 @@
         return target ? target.fullscreenButton : null;
     }
 
-    function getChatButtons() {
-        return Array.prototype.slice.call(document.querySelectorAll('.' + markerClass));
-    }
-
-    function getSingleChatButton(placementTarget) {
-        const existingButtons = getChatButtons();
-        let button = existingButtons.find(function (candidate) {
-            return placementTarget.controlHost.contains(candidate);
-        }) || existingButtons[0];
-
-        if (!button) {
-            button = createButton(placementTarget.fullscreenButton);
-        }
-
-        existingButtons.forEach(function (candidate) {
-            if (candidate !== button) {
-                candidate.remove();
-            }
-        });
-
-        return button;
-    }
-
-    function syncButtonStyleWithFullscreen(button, fullscreenButton) {
-        if (!fullscreenButton) {
-            return;
-        }
-
-        const classNames = [];
-        fullscreenButton.classList.forEach(function (className) {
-            if (className !== 'btnFullscreen' && className !== markerClass && className !== 'hide') {
-                classNames.push(className);
-            }
-        });
-
-        if (classNames.indexOf('emby-button') === -1) {
-            classNames.push('emby-button');
-        }
-
-        classNames.push(markerClass);
-        button.className = classNames.join(' ');
-        button.style.setProperty('display', 'inline-flex', 'important');
-        setChatButtonIcon(button);
-    }
-
-    function placeChatButton(placementTarget, button) {
-        const controlHost = placementTarget.controlHost;
-        const fullscreenButton = placementTarget.fullscreenButton;
-        syncButtonStyleWithFullscreen(button, fullscreenButton);
-
-        if (fullscreenButton && fullscreenButton.parentElement === controlHost) {
-            if (button.parentElement === controlHost && fullscreenButton.nextElementSibling === button) {
+    function getOrCreateOverlayButton(host) {
+        let overlayButton = null;
+        Array.prototype.slice.call(document.querySelectorAll('.' + markerClass)).forEach(function (button) {
+            if (button.parentElement === host && !overlayButton) {
+                overlayButton = button;
                 return;
             }
 
-            fullscreenButton.insertAdjacentElement('afterend', button);
-            return;
+            button.remove();
+        });
+
+        if (!overlayButton) {
+            overlayButton = createButton();
+            host.appendChild(overlayButton);
+        } else if (overlayButton.parentElement !== host) {
+            host.appendChild(overlayButton);
         }
 
-        if (fullscreenButton && fullscreenButton.parentElement) {
-            if (button.parentElement === fullscreenButton.parentElement && fullscreenButton.nextElementSibling === button) {
-                return;
-            }
+        return overlayButton;
+    }
 
-            fullscreenButton.parentElement.insertBefore(button, fullscreenButton.nextSibling);
-            return;
-        }
-
-        if (button.parentElement === controlHost && controlHost.lastElementChild === button) {
-            return;
-        }
-
-        controlHost.appendChild(button);
+    function isPlaybackActive() {
+        return !!document.querySelector('.videoPlayerContainer, [class*="videoPlayerContainer"], .htmlvideoplayer');
     }
 
     function getCurrentUserId() {
@@ -2034,14 +1987,19 @@
     function addButton() {
         addButtonQueued = false;
 
-        const placementTarget = findButtonPlacementTarget();
-        if (!placementTarget || !placementTarget.controlHost) {
+        const floatingHost = getFloatingHost();
+        const shouldShowChatUi = shouldShowButton || isPlaybackActive();
+        if (!shouldShowChatUi) {
+            hideChatPanel();
+            Array.prototype.slice.call(document.querySelectorAll('.' + markerClass)).forEach(function (button) {
+                button.remove();
+            });
             return;
         }
 
         getOrCreateChatPanel();
-
-        placeChatButton(placementTarget, getSingleChatButton(placementTarget));
+        getOrCreateOverlayButton(floatingHost);
+        applyFloatingHostLayout(floatingHost);
     }
 
     function scheduleAddButton() {
