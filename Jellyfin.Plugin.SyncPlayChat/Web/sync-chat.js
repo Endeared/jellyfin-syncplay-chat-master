@@ -135,10 +135,16 @@
         style.id = 'syncPlayChatSidebarLayoutStyles';
         style.textContent = [
             'body.syncPlayChatSidebarOpen { overflow-x: hidden !important; }',
+            'body.syncPlayChatSidebarOpen > *:not(#syncPlayChatPanel):not(#syncPlayChatFloatingHost):not(script):not(style) {',
+            '    max-width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
+            '}',
             'body.syncPlayChatSidebarOpen .skinHeader,',
             'body.syncPlayChatSidebarOpen .mainAnimatedPages,',
             'body.syncPlayChatSidebarOpen .page,',
             'body.syncPlayChatSidebarOpen .libraryPage,',
+            'body.syncPlayChatSidebarOpen .videoPlayerContainer,',
+            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"],',
+            'body.syncPlayChatSidebarOpen .htmlvideoplayer,',
             'body.syncPlayChatSidebarOpen .videoOsdTop,',
             'body.syncPlayChatSidebarOpen .videoOsdBottom,',
             'body.syncPlayChatSidebarOpen .osdHeader,',
@@ -150,12 +156,19 @@
             '    max-width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
             '}',
             'body.syncPlayChatSidebarOpen .skinHeader,',
+            'body.syncPlayChatSidebarOpen .videoPlayerContainer,',
+            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"],',
+            'body.syncPlayChatSidebarOpen .htmlvideoplayer,',
             'body.syncPlayChatSidebarOpen .videoOsdTop,',
             'body.syncPlayChatSidebarOpen .videoOsdBottom,',
             'body.syncPlayChatSidebarOpen .osdHeader,',
             'body.syncPlayChatSidebarOpen .osdControls,',
             'body.syncPlayChatSidebarOpen .nowPlayingBar {',
             '    right: ' + sidebarWidthPx + 'px !important;',
+            '}',
+            'body.syncPlayChatSidebarOpen .videoPlayerContainer video,',
+            'body.syncPlayChatSidebarOpen [class*="videoPlayerContainer"] video {',
+            '    max-width: calc(100vw - ' + sidebarWidthPx + 'px) !important;',
             '}'
         ].join('\n');
         document.head.appendChild(style);
@@ -202,6 +215,8 @@
         panel.style.boxShadow = '-0.4rem 0 1.5rem rgba(0, 0, 0, 0.45)';
         panel.style.color = '#fff';
         panel.style.boxSizing = 'border-box';
+        panel.style.fontFamily = '"Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
+        panel.style.letterSpacing = '0.01em';
         panel.style.zIndex = '99998';
         applyChatPanelLayout(panel);
 
@@ -273,6 +288,8 @@
         input.style.border = '1px solid rgba(255, 255, 255, 0.25)';
         input.style.background = 'rgba(20, 20, 20, 0.8)';
         input.style.color = '#fff';
+        input.style.fontFamily = 'inherit';
+        input.style.fontSize = '0.92rem';
         input.style.resize = 'none';
         input.style.overflowX = 'hidden';
         input.style.overflowY = 'auto';
@@ -295,20 +312,8 @@
             sendComposerMessage();
         });
 
-        input.addEventListener('keydown', function (event) {
-            event.stopPropagation();
-
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendComposerMessage();
-                return;
-            }
-
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                hideChatPanel();
-            }
-        });
+        input.addEventListener('keydown', handleComposerKeydown, true);
+        input.addEventListener('keypress', handleComposerKeydown, true);
 
         input.addEventListener('keyup', function (event) {
             event.stopPropagation();
@@ -354,7 +359,7 @@
         }
 
         panel = createChatPanel();
-        host.insertBefore(panel, host.firstChild);
+        document.body.appendChild(panel);
         return panel;
     }
 
@@ -369,6 +374,26 @@
         const maxHeightPx = 112;
         const nextHeight = Math.max(minHeightPx, Math.min(maxHeightPx, input.scrollHeight));
         input.style.height = String(nextHeight) + 'px';
+    }
+
+    function handleComposerKeydown(event) {
+        event.stopPropagation();
+
+        const isEnter = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
+        if (isEnter && !event.shiftKey) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+
+            sendComposerMessage();
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            hideChatPanel();
+        }
     }
 
     function setComposerBusy(isBusy) {
@@ -441,36 +466,94 @@
         return chatMessage.userName || chatMessage.UserName || 'Someone';
     }
 
+    function getMessageUserId(chatMessage) {
+        return chatMessage.userId || chatMessage.UserId || '';
+    }
+
     function getMessageText(chatMessage) {
         return chatMessage.text || chatMessage.Text || '';
+    }
+
+    function getUserImageUrl(userId) {
+        if (!userId || !window.ApiClient || typeof window.ApiClient.getUrl !== 'function') {
+            return '';
+        }
+
+        return window.ApiClient.getUrl('Users/' + encodeURIComponent(userId) + '/Images/Primary?fillWidth=64&fillHeight=64&quality=90');
+    }
+
+    function createAvatarElement(group) {
+        const avatar = document.createElement('div');
+        avatar.style.width = '2rem';
+        avatar.style.height = '2rem';
+        avatar.style.flex = '0 0 2rem';
+        avatar.style.borderRadius = '50%';
+        avatar.style.border = '2px solid rgba(255, 255, 255, 0.38)';
+        avatar.style.background = 'linear-gradient(135deg, rgba(0, 164, 220, 0.85), rgba(115, 83, 186, 0.85))';
+        avatar.style.display = 'flex';
+        avatar.style.alignItems = 'center';
+        avatar.style.justifyContent = 'center';
+        avatar.style.overflow = 'hidden';
+        avatar.style.boxSizing = 'border-box';
+        avatar.style.color = '#fff';
+        avatar.style.fontWeight = '700';
+        avatar.style.fontSize = '0.9rem';
+        avatar.textContent = (group.userName || '?').slice(0, 1).toUpperCase();
+
+        const imageUrl = getUserImageUrl(group.userId);
+        if (imageUrl) {
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.alt = '';
+            image.style.width = '100%';
+            image.style.height = '100%';
+            image.style.objectFit = 'cover';
+            image.addEventListener('load', function () {
+                avatar.textContent = '';
+                avatar.appendChild(image);
+            }, { once: true });
+        }
+
+        return avatar;
     }
 
     function createMessageGroupRow(group) {
         const row = document.createElement('div');
         row.style.display = 'flex';
-        row.style.flexDirection = 'column';
-        row.style.gap = '0.35rem';
-        row.style.padding = '0.45rem 0.5rem';
-        row.style.borderRadius = '0.5rem';
-        row.style.background = 'rgba(0, 0, 0, 0.28)';
+        row.style.alignItems = 'flex-start';
+        row.style.gap = '0.5rem';
+
+        const bubble = document.createElement('div');
+        bubble.style.display = 'flex';
+        bubble.style.flexDirection = 'column';
+        bubble.style.gap = '0.35rem';
+        bubble.style.minWidth = '0';
+        bubble.style.flex = '1 1 auto';
+        bubble.style.padding = '0.48rem 0.58rem';
+        bubble.style.borderRadius = '0.8rem';
+        bubble.style.background = 'rgba(255, 255, 255, 0.09)';
+        bubble.style.boxShadow = 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)';
 
         const senderElement = document.createElement('div');
         senderElement.textContent = group.userName || 'Someone';
         senderElement.style.fontWeight = '600';
-        senderElement.style.fontSize = '0.78rem';
-        senderElement.style.opacity = '0.85';
-        row.appendChild(senderElement);
+        senderElement.style.fontSize = '0.8rem';
+        senderElement.style.opacity = '0.92';
+        senderElement.style.letterSpacing = '0.015em';
+        bubble.appendChild(senderElement);
 
         group.messages.forEach(function (chatMessage) {
             const messageElement = document.createElement('div');
             messageElement.textContent = getMessageText(chatMessage);
-            messageElement.style.fontSize = '0.9rem';
-            messageElement.style.lineHeight = '1.25rem';
+            messageElement.style.fontSize = '0.93rem';
+            messageElement.style.lineHeight = '1.32rem';
             messageElement.style.whiteSpace = 'pre-wrap';
             messageElement.style.wordBreak = 'break-word';
-            row.appendChild(messageElement);
+            bubble.appendChild(messageElement);
         });
 
+        row.appendChild(createAvatarElement(group));
+        row.appendChild(bubble);
         return row;
     }
 
@@ -478,14 +561,16 @@
         const groups = [];
         messages.forEach(function (message) {
             const userName = getMessageUserName(message);
+            const userId = getMessageUserId(message);
             const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
-            if (lastGroup && lastGroup.userName === userName) {
+            if (lastGroup && lastGroup.userName === userName && lastGroup.userId === userId) {
                 lastGroup.messages.push(message);
                 return;
             }
 
             groups.push({
                 userName: userName,
+                userId: userId,
                 messages: [message]
             });
         });

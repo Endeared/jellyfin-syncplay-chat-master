@@ -9,12 +9,12 @@
         "imageUrl": "https://raw.githubusercontent.com/AbhayVAshokan/jellyfin-syncplay-chat/master/assets/icon.jpg",
         "versions": [
             {
-                "changelog": "Improves sidebar layout reservation, speeds up sends with immediate message rendering, and groups consecutive messages from the same sender.",
+                "changelog": "Adds video player layout reservation, Enter-to-send handling, Jellyfin user avatars, and cleaner chat typography.",
                 "targetAbi": "10.11.0.0",
-                "version": "1.0.1.4",
-                "sourceUrl": "https://github.com/Endeared/jellyfin-syncplay-chat-master/releases/download/v1.0.1.4/Jellyfin.Plugin.SyncPlayChat_1.0.1.4.zip",
-                "checksum": "a9955a054f71283c64ed6a77e6b8f83d",
-                "timestamp": "2026-05-11T20:16:00"
+                "version": "1.0.1.5",
+                "sourceUrl": "https://github.com/Endeared/jellyfin-syncplay-chat-master/releases/download/v1.0.1.5/Jellyfin.Plugin.SyncPlayChat_1.0.1.5.zip",
+                "checksum": "fa17b5f2dc49a48c7d5e316dabce0f5e",
+                "timestamp": "2026-05-11T20:34:00"
             }
         ]
     }

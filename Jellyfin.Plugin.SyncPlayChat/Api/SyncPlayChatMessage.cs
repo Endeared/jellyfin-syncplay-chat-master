@@ -23,6 +23,11 @@ public class SyncPlayChatMessage
     public string UserName { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the sender user identifier.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the message text.
     /// </summary>
     public string Text { get; set; } = string.Empty;

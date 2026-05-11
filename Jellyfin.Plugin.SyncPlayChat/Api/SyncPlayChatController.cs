@@ -92,6 +92,7 @@ public class SyncPlayChatController : ControllerBase
             Id = Guid.NewGuid().ToString("N"),
             GroupId = targetGroup.GroupId.ToString("D"),
             UserName = ResolveSenderName(controllingSession),
+            UserId = controllingSession.UserId == Guid.Empty ? string.Empty : controllingSession.UserId.ToString("D"),
             Text = text,
             TimestampUtc = DateTimeOffset.UtcNow
         };
