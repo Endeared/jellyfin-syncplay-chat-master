@@ -9,11 +9,11 @@
         "imageUrl": "https://raw.githubusercontent.com/AbhayVAshokan/jellyfin-syncplay-chat/master/assets/icon.jpg",
         "versions": [
             {
-                "changelog": "Continuously restores a visible fullscreen-cloned chat toggle beside the fullscreen control and isolates chat interactions.",
+                "changelog": "Keeps exactly one visible chat toggle beside the best available fullscreen controls across Jellyfin rerenders.",
                 "targetAbi": "10.11.0.0",
                 "version": "1.0.1.7",
                 "sourceUrl": "https://github.com/Endeared/jellyfin-syncplay-chat-master/releases/download/v1.0.1.7/Jellyfin.Plugin.SyncPlayChat_1.0.1.7.zip",
-                "checksum": "d7989e3ddbaceaa282d0c2fc73710508",
+                "checksum": "7f4f15cede7a604594db0e285df43ea1",
                 "timestamp": "2026-05-11T20:54:00"
             }
         ]
