@@ -13,7 +13,7 @@
     const messagePollIntervalMs = 2000;
     const chatContextCacheMs = 30000;
     const maxVisibleMessages = 100;
-    const sidebarWidthPx = 300;
+    const sidebarWidthPx = 450;
     const storagePrefix = 'syncPlayChatMessages:';
     let shouldShowButton = false;
     let refreshInProgress = false;
@@ -169,18 +169,18 @@
         button.style.alignItems = 'center';
         button.style.justifyContent = 'center';
         button.style.flex = '0 0 auto';
-        button.style.alignSelf = 'flex-end';
-        button.style.padding = '0.48rem 0.92rem';
-        button.style.borderRadius = '0.6rem';
-        button.style.background = 'rgba(0, 0, 0, 0.7)';
+        button.style.alignSelf = 'center';
+        button.style.padding = '0.42rem 0.62rem';
+        button.style.borderRadius = '50%';
+        button.style.background = 'transparent';
         button.style.color = '#fff';
-        button.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+        button.style.border = '0';
         button.style.fontSize = '0.9rem';
         button.style.cursor = 'pointer';
         button.setAttribute('aria-controls', panelId);
         button.setAttribute('aria-expanded', 'false');
         button.addEventListener('click', function () {
-            openChatPanel(button);
+            toggleChatPanel(button);
         });
         return button;
     }
@@ -202,6 +202,7 @@
         panel.style.letterSpacing = '0.01em';
         panel.style.zIndex = '99998';
         applyChatPanelLayout(panel);
+        isolateChatPanelEvents(panel);
 
         const header = document.createElement('div');
         header.style.display = 'flex';
@@ -214,21 +215,7 @@
         title.style.fontWeight = '600';
         title.style.fontSize = '0.95rem';
 
-        const closeButton = document.createElement('button');
-        closeButton.type = 'button';
-        closeButton.className = 'emby-button';
-        closeButton.textContent = 'Close';
-        closeButton.setAttribute('aria-label', 'Close SyncPlay chat');
-        closeButton.style.padding = '0.25rem 0.45rem';
-        closeButton.style.borderRadius = '0.45rem';
-        closeButton.style.background = 'rgba(255, 255, 255, 0.14)';
-        closeButton.style.color = '#fff';
-        closeButton.style.border = '1px solid rgba(255, 255, 255, 0.2)';
-        closeButton.style.cursor = 'pointer';
-        closeButton.addEventListener('click', hideChatPanel);
-
         header.appendChild(title);
-        header.appendChild(closeButton);
 
         const messages = document.createElement('div');
         messages.id = messagesId;
@@ -279,22 +266,6 @@
         input.style.whiteSpace = 'pre-wrap';
         input.style.wordBreak = 'break-word';
 
-        const sendButton = document.createElement('button');
-        sendButton.id = sendButtonId;
-        sendButton.type = 'button';
-        sendButton.className = 'emby-button';
-        sendButton.textContent = 'Send';
-        sendButton.style.padding = '0.36rem 0.65rem';
-        sendButton.style.borderRadius = '0.45rem';
-        sendButton.style.background = 'rgba(255, 255, 255, 0.18)';
-        sendButton.style.color = '#fff';
-        sendButton.style.border = '1px solid rgba(255, 255, 255, 0.25)';
-        sendButton.style.cursor = 'pointer';
-
-        sendButton.addEventListener('click', function () {
-            sendComposerMessage();
-        });
-
         input.addEventListener('keydown', handleComposerKeydown, true);
         input.addEventListener('keypress', handleComposerKeydown, true);
 
@@ -307,13 +278,36 @@
         });
 
         composer.appendChild(input);
-        composer.appendChild(sendButton);
         panel.appendChild(header);
         panel.appendChild(messages);
         panel.appendChild(status);
         panel.appendChild(composer);
         applyChatPanelLayout(panel);
         return panel;
+    }
+
+    function isolateChatPanelEvents(panel) {
+        [
+            'click',
+            'dblclick',
+            'mousedown',
+            'mouseup',
+            'mousemove',
+            'pointerdown',
+            'pointerup',
+            'pointermove',
+            'touchstart',
+            'touchend',
+            'touchmove',
+            'wheel',
+            'keydown',
+            'keypress',
+            'keyup'
+        ].forEach(function (eventName) {
+            panel.addEventListener(eventName, function (event) {
+                event.stopPropagation();
+            });
+        });
     }
 
     function applyChatPanelLayout(panel) {
@@ -334,7 +328,7 @@
         }
     }
 
-    function getOrCreateChatPanel(host) {
+    function getOrCreateChatPanel() {
         let panel = document.getElementById(panelId);
         if (panel) {
             applyChatPanelLayout(panel);
@@ -379,6 +373,53 @@
         }
     }
 
+    function isTextInputTarget(target) {
+        if (!target || !target.tagName) {
+            return false;
+        }
+
+        const tagName = target.tagName.toLowerCase();
+        return tagName === 'input'
+            || tagName === 'textarea'
+            || tagName === 'select'
+            || target.isContentEditable;
+    }
+
+    function focusComposerInput() {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            return false;
+        }
+
+        window.setTimeout(function () {
+            input.focus();
+            if (typeof input.select === 'function' && !input.value) {
+                input.select();
+            }
+        }, 0);
+        return true;
+    }
+
+    function handleGlobalChatFocusShortcut(event) {
+        if (!chatPanelVisible || event.defaultPrevented || isTextInputTarget(event.target)) {
+            return;
+        }
+
+        const isSlash = event.key === '/' || event.code === 'Slash';
+        const isEnter = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
+        if (!isSlash && !isEnter) {
+            return;
+        }
+
+        if (focusComposerInput()) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+        }
+    }
+
     function setComposerBusy(isBusy) {
         const input = document.getElementById(inputId);
         const sendButton = document.getElementById(sendButtonId);
@@ -409,13 +450,22 @@
         }
     }
 
+    function toggleChatPanel(button) {
+        const panel = document.getElementById(panelId);
+        if (chatPanelVisible && panel && panel.style.display !== 'none') {
+            hideChatPanel();
+            return;
+        }
+
+        openChatPanel(button);
+    }
+
     function openChatPanel(button) {
         if (!shouldShowButton) {
             return;
         }
 
-        const host = getFloatingHost();
-        const panel = getOrCreateChatPanel(host);
+        const panel = getOrCreateChatPanel();
 
         panel.style.display = 'flex';
         chatPanelVisible = true;
@@ -651,8 +701,7 @@
     }
 
     function renderChatMessages(groupId, messages) {
-        const host = getFloatingHost();
-        getOrCreateChatPanel(host);
+        getOrCreateChatPanel();
 
         const container = document.getElementById(messagesId);
         if (!container) {
@@ -732,17 +781,40 @@
         return typeof groupId === 'string' ? groupId : '';
     }
 
-    function removeExtraButtons() {
+    function removeExtraButtons(controlHost) {
         const existingButtons = document.querySelectorAll('.' + markerClass);
-        if (existingButtons.length > 1) {
-            for (let i = 1; i < existingButtons.length; i += 1) {
-                existingButtons[i].remove();
+        let keptButton = null;
+        existingButtons.forEach(function (button) {
+            if (shouldShowButton && controlHost && controlHost.contains(button) && !keptButton) {
+                keptButton = button;
+                return;
             }
+
+            button.remove();
+        });
+    }
+
+    function findFullscreenButton(controlHost) {
+        if (!controlHost) {
+            return null;
         }
 
-        if (!shouldShowButton && existingButtons.length > 0) {
-            existingButtons[0].remove();
+        return controlHost.querySelector('.btnFullscreen');
+    }
+
+    function placeChatButton(controlHost, button) {
+        const fullscreenButton = findFullscreenButton(controlHost);
+        if (fullscreenButton && fullscreenButton.parentElement === controlHost) {
+            fullscreenButton.insertAdjacentElement('afterend', button);
+            return;
         }
+
+        if (fullscreenButton && fullscreenButton.parentElement) {
+            fullscreenButton.parentElement.insertBefore(button, fullscreenButton.nextSibling);
+            return;
+        }
+
+        controlHost.appendChild(button);
     }
 
     function getCurrentUserId() {
@@ -1779,38 +1851,26 @@
 
     function addButton() {
         const controlHost = getControlHost();
-        const floatingHost = getFloatingHost();
-        removeExtraButtons();
+        removeExtraButtons(controlHost);
 
-        if (!controlHost && !floatingHost) {
+        if (!controlHost) {
             return;
         }
 
         if (!shouldShowButton) {
             hideChatPanel();
-
-            if (controlHost) {
-                const controlButton = controlHost.querySelector('.' + markerClass);
-                if (controlButton) {
-                    controlButton.remove();
-                }
-            }
-
-            const floatingButton = floatingHost.querySelector('.' + markerClass);
-            if (floatingButton) {
-                floatingButton.remove();
-            }
-
             return;
         }
 
-        getOrCreateChatPanel(floatingHost);
+        getOrCreateChatPanel();
 
-        if (floatingHost.querySelector('.' + markerClass)) {
+        const existingButton = controlHost.querySelector('.' + markerClass);
+        if (existingButton) {
+            placeChatButton(controlHost, existingButton);
             return;
         }
 
-        floatingHost.appendChild(createButton());
+        placeChatButton(controlHost, createButton());
     }
 
     function start() {
@@ -1829,9 +1889,9 @@
         window.setInterval(pollChatMessages, messagePollIntervalMs);
         window.addEventListener('resize', function () {
             applyDocumentLayout();
-            applyFloatingHostLayout(getFloatingHost());
         });
         window.addEventListener('focus', refreshSyncPlayState);
+        document.addEventListener('keydown', handleGlobalChatFocusShortcut, true);
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) {
                 refreshSyncPlayState();
