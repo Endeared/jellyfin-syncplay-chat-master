@@ -15,7 +15,6 @@
     const statusId = 'syncPlayChatStatus';
     const inputId = 'syncPlayChatInput';
     const sendButtonId = 'syncPlayChatSendButton';
-    const refreshIntervalMs = 5000;
     const messagePollIntervalMs = 2000;
     const chatContextCacheMs = 30000;
     const maxVisibleMessages = 100;
@@ -1773,7 +1772,7 @@
     }
 
     async function pollChatMessages() {
-        if (messagePollInProgress || (!shouldShowButton && !chatPanelVisible)) {
+        if (messagePollInProgress || !chatPanelVisible) {
             return;
         }
 
@@ -1988,7 +1987,7 @@
         addButtonQueued = false;
 
         const floatingHost = getFloatingHost();
-        const shouldShowChatUi = shouldShowButton || isPlaybackActive();
+        const shouldShowChatUi = isPlaybackActive();
         if (!shouldShowChatUi) {
             hideChatPanel();
             Array.prototype.slice.call(document.querySelectorAll('.' + markerClass)).forEach(function (button) {
@@ -2022,20 +2021,13 @@
         const observer = new MutationObserver(scheduleAddButton);
         observer.observe(document.body, { childList: true, subtree: true });
 
-        refreshSyncPlayState();
-        window.setInterval(refreshSyncPlayState, refreshIntervalMs);
+        addButton();
         window.setInterval(scheduleAddButton, 500);
         window.setInterval(pollChatMessages, messagePollIntervalMs);
         window.addEventListener('resize', function () {
             applyDocumentLayout();
         });
-        window.addEventListener('focus', refreshSyncPlayState);
         document.addEventListener('keydown', handleGlobalChatFocusShortcut, true);
-        document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) {
-                refreshSyncPlayState();
-            }
-        });
     }
 
     if (document.readyState === 'loading') {
