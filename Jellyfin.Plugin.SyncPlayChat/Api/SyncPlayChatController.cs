@@ -87,21 +87,22 @@ public class SyncPlayChatController : ControllerBase
             });
         }
 
-        string groupId = targetGroup.GroupId.ToString("D");
-        AddMessage(new SyncPlayChatMessage
+        var message = new SyncPlayChatMessage
         {
             Id = Guid.NewGuid().ToString("N"),
-            GroupId = groupId,
+            GroupId = targetGroup.GroupId.ToString("D"),
             UserName = ResolveSenderName(controllingSession),
             Text = text,
             TimestampUtc = DateTimeOffset.UtcNow
-        });
+        };
+        AddMessage(message);
 
         return Ok(new SyncPlayChatSendResponse
         {
             Attempted = 1,
             Sent = 1,
-            Failed = 0
+            Failed = 0,
+            Message = message
         });
     }
 

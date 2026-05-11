@@ -9,12 +9,12 @@
         "imageUrl": "https://raw.githubusercontent.com/AbhayVAshokan/jellyfin-syncplay-chat/master/assets/icon.jpg",
         "versions": [
             {
-                "changelog": "Replaces Jellyfin toast delivery with plugin-managed chat history, a 300px right sidebar, sender names, and refresh-persistent messages.",
+                "changelog": "Improves sidebar layout reservation, speeds up sends with immediate message rendering, and groups consecutive messages from the same sender.",
                 "targetAbi": "10.11.0.0",
-                "version": "1.0.1.3",
-                "sourceUrl": "https://github.com/Endeared/jellyfin-syncplay-chat-master/releases/download/v1.0.1.3/Jellyfin.Plugin.SyncPlayChat_1.0.1.3.zip",
-                "checksum": "5c8bee72101f0365da86fe3b3b59ad3e",
-                "timestamp": "2026-05-11T20:02:00"
+                "version": "1.0.1.4",
+                "sourceUrl": "https://github.com/Endeared/jellyfin-syncplay-chat-master/releases/download/v1.0.1.4/Jellyfin.Plugin.SyncPlayChat_1.0.1.4.zip",
+                "checksum": "a9955a054f71283c64ed6a77e6b8f83d",
+                "timestamp": "2026-05-11T20:16:00"
             }
         ]
     }

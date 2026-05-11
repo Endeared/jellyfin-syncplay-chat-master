@@ -19,4 +19,9 @@ public class SyncPlayChatSendResponse
     /// Gets or sets number of failed chat message writes.
     /// </summary>
     public int Failed { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stored chat message.
+    /// </summary>
+    public SyncPlayChatMessage? Message { get; set; }
 }

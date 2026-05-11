@@ -11,6 +11,7 @@
     const sendButtonId = 'syncPlayChatSendButton';
     const refreshIntervalMs = 5000;
     const messagePollIntervalMs = 2000;
+    const chatContextCacheMs = 30000;
     const maxVisibleMessages = 100;
     const sidebarWidthPx = 300;
     const storagePrefix = 'syncPlayChatMessages:';
@@ -23,7 +24,9 @@
     let originalBodyPaddingRight = '';
     let baseBodyPaddingRight = '0px';
     let lastChatContext = null;
+    let lastChatContextResolvedAt = 0;
     let lastRenderedGroupId = '';
+    let lastRenderedMessages = [];
 
     function normalizeId(value) {
         if (value === null || value === undefined) {
@@ -102,6 +105,7 @@
         }
 
         const shouldAdjustBody = chatPanelVisible && !isMobileViewport();
+        document.body.classList.toggle('syncPlayChatSidebarOpen', shouldAdjustBody);
         if (shouldAdjustBody && !bodyLayoutAdjusted) {
             originalBodyPaddingRight = document.body.style.paddingRight || '';
             baseBodyPaddingRight = window.getComputedStyle(document.body).paddingRight || '0px';
@@ -120,6 +124,41 @@
         if (host) {
             applyFloatingHostLayout(host);
         }
+    }
+
+    function ensureSidebarLayoutStyles() {
+        if (document.getElementById('syncPlayChatSidebarLayoutStyles')) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'syncPlayChatSidebarLayoutStyles';
+        style.textContent = [
+            'body.syncPlayChatSidebarOpen { overflow-x: hidden !important; }',
+            'body.syncPlayChatSidebarOpen .skinHeader,',
+            'body.syncPlayChatSidebarOpen .mainAnimatedPages,',
+            'body.syncPlayChatSidebarOpen .page,',
+            'body.syncPlayChatSidebarOpen .libraryPage,',
+            'body.syncPlayChatSidebarOpen .videoOsdTop,',
+            'body.syncPlayChatSidebarOpen .videoOsdBottom,',
+            'body.syncPlayChatSidebarOpen .osdHeader,',
+            'body.syncPlayChatSidebarOpen .osdControls,',
+            'body.syncPlayChatSidebarOpen .nowPlayingBar,',
+            'body.syncPlayChatSidebarOpen .backgroundContainer,',
+            'body.syncPlayChatSidebarOpen .backdropContainer {',
+            '    width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
+            '    max-width: calc(100% - ' + sidebarWidthPx + 'px) !important;',
+            '}',
+            'body.syncPlayChatSidebarOpen .skinHeader,',
+            'body.syncPlayChatSidebarOpen .videoOsdTop,',
+            'body.syncPlayChatSidebarOpen .videoOsdBottom,',
+            'body.syncPlayChatSidebarOpen .osdHeader,',
+            'body.syncPlayChatSidebarOpen .osdControls,',
+            'body.syncPlayChatSidebarOpen .nowPlayingBar {',
+            '    right: ' + sidebarWidthPx + 'px !important;',
+            '}'
+        ].join('\n');
+        document.head.appendChild(style);
     }
 
     function createButton() {
@@ -398,31 +437,60 @@
         }
     }
 
-    function createMessageRow(chatMessage) {
+    function getMessageUserName(chatMessage) {
+        return chatMessage.userName || chatMessage.UserName || 'Someone';
+    }
+
+    function getMessageText(chatMessage) {
+        return chatMessage.text || chatMessage.Text || '';
+    }
+
+    function createMessageGroupRow(group) {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.flexDirection = 'column';
-        row.style.gap = '0.15rem';
+        row.style.gap = '0.35rem';
         row.style.padding = '0.45rem 0.5rem';
         row.style.borderRadius = '0.5rem';
         row.style.background = 'rgba(0, 0, 0, 0.28)';
 
         const senderElement = document.createElement('div');
-        senderElement.textContent = chatMessage.userName || chatMessage.UserName || 'Someone';
+        senderElement.textContent = group.userName || 'Someone';
         senderElement.style.fontWeight = '600';
         senderElement.style.fontSize = '0.78rem';
         senderElement.style.opacity = '0.85';
-
-        const messageElement = document.createElement('div');
-        messageElement.textContent = chatMessage.text || chatMessage.Text || '';
-        messageElement.style.fontSize = '0.9rem';
-        messageElement.style.lineHeight = '1.25rem';
-        messageElement.style.whiteSpace = 'pre-wrap';
-        messageElement.style.wordBreak = 'break-word';
-
         row.appendChild(senderElement);
-        row.appendChild(messageElement);
+
+        group.messages.forEach(function (chatMessage) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = getMessageText(chatMessage);
+            messageElement.style.fontSize = '0.9rem';
+            messageElement.style.lineHeight = '1.25rem';
+            messageElement.style.whiteSpace = 'pre-wrap';
+            messageElement.style.wordBreak = 'break-word';
+            row.appendChild(messageElement);
+        });
+
         return row;
+    }
+
+    function groupConsecutiveMessages(messages) {
+        const groups = [];
+        messages.forEach(function (message) {
+            const userName = getMessageUserName(message);
+            const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+            if (lastGroup && lastGroup.userName === userName) {
+                lastGroup.messages.push(message);
+                return;
+            }
+
+            groups.push({
+                userName: userName,
+                messages: [message]
+            });
+        });
+
+        return groups;
     }
 
     function normalizeChatMessages(response) {
@@ -457,6 +525,30 @@
 
     function getMessageId(chatMessage) {
         return chatMessage.id || chatMessage.Id || '';
+    }
+
+    function mergeChatMessages(existingMessages, newMessages) {
+        const merged = [];
+        const seenIds = {};
+
+        (existingMessages || []).concat(newMessages || []).forEach(function (message) {
+            if (!message) {
+                return;
+            }
+
+            const id = getMessageId(message);
+            if (id && seenIds[id]) {
+                return;
+            }
+
+            if (id) {
+                seenIds[id] = true;
+            }
+
+            merged.push(message);
+        });
+
+        return merged.slice(-maxVisibleMessages);
     }
 
     function getMessageStorageKey(groupId) {
@@ -510,12 +602,13 @@
             container.removeChild(container.firstChild);
         }
 
-        visibleMessages.forEach(function (message) {
-            container.appendChild(createMessageRow(message));
+        groupConsecutiveMessages(visibleMessages).forEach(function (group) {
+            container.appendChild(createMessageGroupRow(group));
         });
 
         container.setAttribute('data-sync-play-chat-message-ids', nextIds);
         lastRenderedGroupId = groupId || '';
+        lastRenderedMessages = visibleMessages;
         saveMessagesToStorage(groupId, visibleMessages);
 
         if (wasNearBottom) {
@@ -1346,7 +1439,12 @@
         return participants;
     }
 
-    async function resolveChatContext() {
+    async function resolveChatContext(forceRefresh) {
+        const now = Date.now();
+        if (!forceRefresh && lastChatContext && now - lastChatContextResolvedAt < chatContextCacheMs) {
+            return lastChatContext;
+        }
+
         const sessions = await fetchSessions();
         const groupsResponse = await fetchJson('SyncPlay/List');
         const groups = normalizeGroupsResponse(groupsResponse);
@@ -1373,6 +1471,7 @@
             participants: extractParticipantsFromGroups(groupsForDetailLookup.length > 0 ? groupsForDetailLookup : groups)
         };
         lastChatContext = context;
+        lastChatContextResolvedAt = now;
         return context;
     }
 
@@ -1405,7 +1504,7 @@
 
         messagePollInProgress = true;
         try {
-            const context = lastChatContext || await resolveChatContext();
+            const context = await resolveChatContext(false);
             if (context.groupId) {
                 const storedMessages = loadMessagesFromStorage(context.groupId);
                 if (storedMessages.length > 0) {
@@ -1460,7 +1559,8 @@
         return {
             attempted: Number(normalized.Attempted) || 0,
             sent: Number(normalized.Sent) || 0,
-            failed: Number(normalized.Failed) || 0
+            failed: Number(normalized.Failed) || 0,
+            message: normalized.Message || normalized.message || null
         };
     }
 
@@ -1478,14 +1578,19 @@
         setComposerBusy(true);
 
         try {
-            const context = await resolveChatContext();
+            const context = await resolveChatContext(false);
             const result = await sendMessageViaServer(trimmedText, context);
 
             logDebug('Sync chat send result', result);
 
             if (result && result.sent > 0) {
                 clearComposerInput();
-                await pollChatMessages();
+                if (result.message) {
+                    const messageGroupId = result.message.groupId || result.message.GroupId || context.groupId;
+                    renderChatMessages(messageGroupId, mergeChatMessages(lastRenderedMessages, [result.message]));
+                }
+
+                pollChatMessages();
             } else {
                 showLocalToast('Failed to send SyncPlay chat message.');
             }
@@ -1592,9 +1697,8 @@
             shouldShowButton = await isCurrentUserInSyncPlayGroup();
             if (!shouldShowButton) {
                 lastChatContext = null;
+                lastChatContextResolvedAt = 0;
                 lastRenderedGroupId = '';
-            } else {
-                lastChatContext = null;
             }
         } catch (err) {
             logDebug('Failed to refresh SyncPlay state', err);
@@ -1647,6 +1751,7 @@
         }
 
         window.__syncPlayChatLoaded = true;
+        ensureSidebarLayoutStyles();
 
         const observer = new MutationObserver(addButton);
         observer.observe(document.body, { childList: true, subtree: true });
