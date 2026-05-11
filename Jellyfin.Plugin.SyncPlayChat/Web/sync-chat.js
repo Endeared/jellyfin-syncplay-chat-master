@@ -6,7 +6,7 @@
     }
 
     window.__syncPlayChatLoaded = true;
-    window.__syncPlayChatVersion = '1.0.1.9-passive-playback-only';
+    window.__syncPlayChatVersion = '1.0.1.9-mobile-chat-layout';
 
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
@@ -20,6 +20,8 @@
     const chatContextCacheMs = 30000;
     const maxVisibleMessages = 100;
     const sidebarWidthPx = 450;
+    const mobilePanelHeight = '34vh';
+    const mobileMessagesMaxHeight = '17vh';
     const storagePrefix = 'syncPlayChatMessages:';
     let shouldShowButton = false;
     let refreshInProgress = false;
@@ -195,14 +197,12 @@
     function applyFloatingHostLayout(host) {
         const mobile = isMobileViewport();
         host.style.flexDirection = 'column';
-        host.style.top = mobile
-            ? (chatPanelVisible ? 'calc(45vh + 0.75rem)' : '0.75rem')
-            : '50%';
+        host.style.top = mobile ? '0.75rem' : '50%';
         host.style.right = mobile || !chatPanelVisible ? '1rem' : 'calc(1rem + ' + sidebarWidthPx + 'px)';
         host.style.bottom = 'auto';
-        host.style.left = mobile ? '1rem' : 'auto';
-        host.style.alignItems = mobile ? 'stretch' : 'flex-end';
-        host.style.maxWidth = mobile ? 'none' : 'calc(100vw - 2rem)';
+        host.style.left = mobile && !chatPanelVisible ? '1rem' : 'auto';
+        host.style.alignItems = mobile && !chatPanelVisible ? 'stretch' : 'flex-end';
+        host.style.maxWidth = mobile && chatPanelVisible ? 'auto' : (mobile ? 'none' : 'calc(100vw - 2rem)');
         host.style.transform = mobile ? 'none' : 'translateY(-50%)';
 
         const panel = document.getElementById(panelId);
@@ -269,18 +269,20 @@
         document.head.appendChild(style);
     }
 
-    function setChatButtonIcon(button) {
+    function setChatButtonIcon(button, isOpen) {
         const iconElement = button.querySelector('span, i');
         if (iconElement) {
             iconElement.classList.remove('fullscreen');
             iconElement.classList.remove('hide');
             iconElement.classList.add('chat');
-            iconElement.textContent = 'chat';
+            iconElement.textContent = isOpen ? 'close' : 'chat';
             iconElement.setAttribute('aria-hidden', 'true');
             return;
         }
 
-        button.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
+        button.innerHTML = isOpen
+            ? '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4-6.3-6.3-6.3 6.3-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
     }
 
     function createButton(fullscreenButton) {
@@ -295,8 +297,8 @@
             button.classList.add('emby-button');
         }
 
-        button.setAttribute('aria-label', 'SyncPlay chat');
-        button.title = 'SyncPlay chat';
+        button.setAttribute('aria-label', 'Open SyncPlay chat');
+        button.title = 'Open SyncPlay chat';
         button.removeAttribute('data-action');
         button.removeAttribute('data-command');
         button.removeAttribute('data-id');
@@ -352,6 +354,7 @@
         header.style.gap = '0.75rem';
 
         const title = document.createElement('div');
+        title.dataset.syncPlayChatTitle = 'true';
         title.textContent = 'SyncPlay Chat';
         title.style.fontWeight = '600';
         title.style.fontSize = '0.95rem';
@@ -458,14 +461,39 @@
         panel.style.left = mobile ? '0' : 'auto';
         panel.style.bottom = mobile ? 'auto' : '0';
         panel.style.width = mobile ? 'auto' : sidebarWidthPx + 'px';
-        panel.style.height = mobile ? '45vh' : '100vh';
+        panel.style.height = mobile ? mobilePanelHeight : '100vh';
         panel.style.maxWidth = mobile ? 'none' : sidebarWidthPx + 'px';
-        panel.style.maxHeight = mobile ? '45vh' : '100vh';
+        panel.style.maxHeight = mobile ? mobilePanelHeight : '100vh';
         panel.style.borderRadius = mobile ? '0 0 0.75rem 0.75rem' : '0';
+        panel.style.gap = mobile ? '0.4rem' : '0.55rem';
+        panel.style.padding = mobile ? '0.48rem' : '0.65rem';
+
+        const title = panel.querySelector('[data-sync-play-chat-title="true"]');
+        if (title) {
+            title.style.fontSize = mobile ? '0.84rem' : '0.95rem';
+        }
 
         const messages = document.getElementById(messagesId);
         if (messages) {
-            messages.style.maxHeight = mobile ? '24vh' : 'none';
+            messages.style.maxHeight = mobile ? mobileMessagesMaxHeight : 'none';
+            messages.style.gap = mobile ? '0.38rem' : '0.5rem';
+            messages.style.padding = mobile ? '0.25rem' : '0.35rem';
+        }
+
+        const status = document.getElementById(statusId);
+        if (status) {
+            status.style.fontSize = mobile ? '0.68rem' : '0.78rem';
+            status.style.minHeight = mobile ? '0.75rem' : '1rem';
+        }
+
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.style.minHeight = mobile ? '1.75rem' : '2rem';
+            input.style.height = mobile && input.value.length === 0 ? '1.75rem' : input.style.height;
+            input.style.maxHeight = mobile ? '4.5rem' : '7rem';
+            input.style.padding = mobile ? '0.28rem 0.45rem' : '0.35rem 0.55rem';
+            input.style.lineHeight = mobile ? '1.05rem' : '1.2rem';
+            input.style.fontSize = mobile ? '0.82rem' : '0.92rem';
         }
     }
 
@@ -488,8 +516,9 @@
         }
 
         input.style.height = 'auto';
-        const minHeightPx = 32;
-        const maxHeightPx = 112;
+        const mobile = isMobileViewport();
+        const minHeightPx = mobile ? 28 : 32;
+        const maxHeightPx = mobile ? 72 : 112;
         const nextHeight = Math.max(minHeightPx, Math.min(maxHeightPx, input.scrollHeight));
         input.style.height = String(nextHeight) + 'px';
     }
@@ -566,7 +595,8 @@
         const sendButton = document.getElementById(sendButtonId);
 
         if (input) {
-            input.disabled = isBusy;
+            input.readOnly = isBusy;
+            input.setAttribute('aria-busy', isBusy ? 'true' : 'false');
         }
 
         if (sendButton) {
@@ -588,6 +618,9 @@
         if (button) {
             button.style.opacity = '1';
             button.setAttribute('aria-expanded', 'false');
+            button.setAttribute('aria-label', 'Open SyncPlay chat');
+            button.title = 'Open SyncPlay chat';
+            setChatButtonIcon(button, false);
         }
     }
 
@@ -614,6 +647,9 @@
         if (chatButton) {
             chatButton.style.opacity = '0.85';
             chatButton.setAttribute('aria-expanded', 'true');
+            chatButton.setAttribute('aria-label', 'Close SyncPlay chat');
+            chatButton.title = 'Close SyncPlay chat';
+            setChatButtonIcon(chatButton, true);
         }
 
         const input = document.getElementById(inputId);
@@ -653,10 +689,12 @@
     }
 
     function createAvatarElement(group) {
+        const mobile = isMobileViewport();
+        const avatarSize = mobile ? '1.65rem' : '2rem';
         const avatar = document.createElement('div');
-        avatar.style.width = '2rem';
-        avatar.style.height = '2rem';
-        avatar.style.flex = '0 0 2rem';
+        avatar.style.width = avatarSize;
+        avatar.style.height = avatarSize;
+        avatar.style.flex = '0 0 ' + avatarSize;
         avatar.style.borderRadius = '50%';
         avatar.style.border = '2px solid rgba(255, 255, 255, 0.38)';
         avatar.style.background = 'linear-gradient(135deg, rgba(0, 164, 220, 0.85), rgba(115, 83, 186, 0.85))';
@@ -667,7 +705,7 @@
         avatar.style.boxSizing = 'border-box';
         avatar.style.color = '#fff';
         avatar.style.fontWeight = '700';
-        avatar.style.fontSize = '0.9rem';
+        avatar.style.fontSize = mobile ? '0.74rem' : '0.9rem';
         avatar.textContent = (group.userName || '?').slice(0, 1).toUpperCase();
 
         const imageUrl = getUserImageUrl(group.userId);
@@ -688,18 +726,19 @@
     }
 
     function createMessageGroupRow(group) {
+        const mobile = isMobileViewport();
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.alignItems = 'flex-start';
-        row.style.gap = '0.5rem';
+        row.style.gap = mobile ? '0.38rem' : '0.5rem';
 
         const bubble = document.createElement('div');
         bubble.style.display = 'flex';
         bubble.style.flexDirection = 'column';
-        bubble.style.gap = '0.35rem';
+        bubble.style.gap = mobile ? '0.26rem' : '0.35rem';
         bubble.style.minWidth = '0';
         bubble.style.flex = '1 1 auto';
-        bubble.style.padding = '0.48rem 0.58rem';
+        bubble.style.padding = mobile ? '0.36rem 0.48rem' : '0.48rem 0.58rem';
         bubble.style.borderRadius = '0.8rem';
         bubble.style.background = 'rgba(255, 255, 255, 0.09)';
         bubble.style.boxShadow = 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)';
@@ -707,7 +746,7 @@
         const senderElement = document.createElement('div');
         senderElement.textContent = group.userName || 'Someone';
         senderElement.style.fontWeight = '600';
-        senderElement.style.fontSize = '0.8rem';
+        senderElement.style.fontSize = mobile ? '0.7rem' : '0.8rem';
         senderElement.style.opacity = '0.92';
         senderElement.style.letterSpacing = '0.015em';
         bubble.appendChild(senderElement);
@@ -715,8 +754,8 @@
         group.messages.forEach(function (chatMessage) {
             const messageElement = document.createElement('div');
             messageElement.textContent = getMessageText(chatMessage);
-            messageElement.style.fontSize = '0.93rem';
-            messageElement.style.lineHeight = '1.32rem';
+            messageElement.style.fontSize = mobile ? '0.82rem' : '0.93rem';
+            messageElement.style.lineHeight = mobile ? '1.12rem' : '1.32rem';
             messageElement.style.whiteSpace = 'pre-wrap';
             messageElement.style.wordBreak = 'break-word';
             bubble.appendChild(messageElement);
@@ -1875,6 +1914,9 @@
         } finally {
             sendInProgress = false;
             setComposerBusy(false);
+            if (chatPanelVisible) {
+                focusComposerInput();
+            }
         }
     }
 
