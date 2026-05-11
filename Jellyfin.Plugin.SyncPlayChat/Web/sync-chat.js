@@ -6,6 +6,7 @@
     }
 
     window.__syncPlayChatLoaded = true;
+    window.__syncPlayChatVersion = '1.0.1.9-passive-playback-only';
 
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
@@ -1986,7 +1987,6 @@
     function addButton() {
         addButtonQueued = false;
 
-        const floatingHost = getFloatingHost();
         const shouldShowChatUi = isPlaybackActive();
         if (!shouldShowChatUi) {
             hideChatPanel();
@@ -1996,6 +1996,8 @@
             return;
         }
 
+        const floatingHost = getFloatingHost();
+        ensureSidebarLayoutStyles();
         getOrCreateChatPanel();
         getOrCreateOverlayButton(floatingHost);
         applyFloatingHostLayout(floatingHost);
@@ -2016,7 +2018,6 @@
         }
 
         window.__syncPlayChatLoaded = true;
-        ensureSidebarLayoutStyles();
 
         const observer = new MutationObserver(scheduleAddButton);
         observer.observe(document.body, { childList: true, subtree: true });
