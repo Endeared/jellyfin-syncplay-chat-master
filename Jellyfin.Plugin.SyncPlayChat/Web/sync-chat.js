@@ -19,6 +19,7 @@
     let refreshInProgress = false;
     let sendInProgress = false;
     let messagePollInProgress = false;
+    let addButtonQueued = false;
     let chatPanelVisible = false;
     let bodyLayoutAdjusted = false;
     let originalBodyPaddingRight = '';
@@ -805,12 +806,24 @@
     function placeChatButton(controlHost, button) {
         const fullscreenButton = findFullscreenButton(controlHost);
         if (fullscreenButton && fullscreenButton.parentElement === controlHost) {
+            if (button.parentElement === controlHost && fullscreenButton.nextElementSibling === button) {
+                return;
+            }
+
             fullscreenButton.insertAdjacentElement('afterend', button);
             return;
         }
 
         if (fullscreenButton && fullscreenButton.parentElement) {
+            if (button.parentElement === fullscreenButton.parentElement && fullscreenButton.nextElementSibling === button) {
+                return;
+            }
+
             fullscreenButton.parentElement.insertBefore(button, fullscreenButton.nextSibling);
+            return;
+        }
+
+        if (button.parentElement === controlHost && controlHost.lastElementChild === button) {
             return;
         }
 
@@ -1850,6 +1863,8 @@
     }
 
     function addButton() {
+        addButtonQueued = false;
+
         const controlHost = getControlHost();
         removeExtraButtons(controlHost);
 
@@ -1873,6 +1888,15 @@
         placeChatButton(controlHost, createButton());
     }
 
+    function scheduleAddButton() {
+        if (addButtonQueued) {
+            return;
+        }
+
+        addButtonQueued = true;
+        window.requestAnimationFrame(addButton);
+    }
+
     function start() {
         if (!document.body) {
             return;
@@ -1881,7 +1905,7 @@
         window.__syncPlayChatLoaded = true;
         ensureSidebarLayoutStyles();
 
-        const observer = new MutationObserver(addButton);
+        const observer = new MutationObserver(scheduleAddButton);
         observer.observe(document.body, { childList: true, subtree: true });
 
         refreshSyncPlayState();
