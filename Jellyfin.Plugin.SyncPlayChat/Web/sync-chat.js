@@ -173,14 +173,35 @@
         document.head.appendChild(style);
     }
 
-    function createButton() {
-        const button = document.createElement('button');
+    function setChatButtonIcon(button) {
+        const iconElement = button.querySelector('span, i');
+        if (iconElement) {
+            iconElement.textContent = 'chat';
+            iconElement.setAttribute('aria-hidden', 'true');
+            return;
+        }
+
+        button.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
+    }
+
+    function createButton(fullscreenButton) {
+        const button = fullscreenButton ? fullscreenButton.cloneNode(true) : document.createElement('button');
         button.id = buttonId;
         button.type = 'button';
-        button.className = 'emby-button ' + markerClass;
+        button.classList.remove('btnFullscreen');
+        button.classList.remove(markerClass);
+        button.classList.add(markerClass);
+        if (!button.classList.contains('emby-button')) {
+            button.classList.add('emby-button');
+        }
+
         button.setAttribute('aria-label', 'SyncPlay chat');
         button.title = 'SyncPlay chat';
-        button.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
+        button.removeAttribute('data-action');
+        button.removeAttribute('data-command');
+        button.removeAttribute('data-id');
+        button.removeAttribute('is');
+        setChatButtonIcon(button);
         button.style.display = 'inline-flex';
         button.style.alignItems = 'center';
         button.style.justifyContent = 'center';
@@ -197,6 +218,7 @@
         button.style.minHeight = '2.4rem';
         button.setAttribute('aria-controls', panelId);
         button.setAttribute('aria-expanded', 'false');
+        button.onclick = null;
         button.addEventListener('click', function () {
             toggleChatPanel(button);
         });
@@ -479,10 +501,6 @@
     }
 
     function openChatPanel(button) {
-        if (!shouldShowButton) {
-            return;
-        }
-
         const panel = getOrCreateChatPanel();
 
         panel.style.display = 'flex';
@@ -803,7 +821,7 @@
         const existingButtons = document.querySelectorAll('.' + markerClass);
         let keptButton = null;
         existingButtons.forEach(function (button) {
-            if (shouldShowButton && controlHost && controlHost.contains(button) && !keptButton) {
+            if (controlHost && controlHost.contains(button) && !keptButton) {
                 keptButton = button;
                 return;
             }
@@ -840,6 +858,7 @@
 
         classNames.push(markerClass);
         button.className = classNames.join(' ');
+        setChatButtonIcon(button);
     }
 
     function placeChatButton(controlHost, button) {
@@ -1692,7 +1711,7 @@
     }
 
     async function pollChatMessages() {
-        if (messagePollInProgress || !shouldShowButton) {
+        if (messagePollInProgress || (!shouldShowButton && !chatPanelVisible)) {
             return;
         }
 
@@ -1913,11 +1932,6 @@
             return;
         }
 
-        if (!shouldShowButton) {
-            hideChatPanel();
-            return;
-        }
-
         getOrCreateChatPanel();
 
         const existingButton = controlHost.querySelector('.' + markerClass);
@@ -1926,7 +1940,7 @@
             return;
         }
 
-        placeChatButton(controlHost, createButton());
+        placeChatButton(controlHost, createButton(findFullscreenButton(controlHost)));
     }
 
     function scheduleAddButton() {
@@ -1951,6 +1965,7 @@
 
         refreshSyncPlayState();
         window.setInterval(refreshSyncPlayState, refreshIntervalMs);
+        window.setInterval(scheduleAddButton, 500);
         window.setInterval(pollChatMessages, messagePollIntervalMs);
         window.addEventListener('resize', function () {
             applyDocumentLayout();
