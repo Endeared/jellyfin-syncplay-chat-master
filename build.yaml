@@ -1,0 +1,16 @@
+---
+name: "SyncPlay Chat"
+guid: "a69744cc-2281-48bf-adef-8e451a16ff71"
+version: "1.0.0.0"
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+overview: "Short description about your plugin"
+description: >
+  This is a longer description that can span more than one
+  line and include details about your plugin.
+category: "General"
+owner: "jellyfin"
+artifacts:
+- "Jellyfin.Plugin.SyncPlayChat.dll"
+changelog: >
+  changelog
