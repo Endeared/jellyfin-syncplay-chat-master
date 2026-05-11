@@ -51,9 +51,24 @@
     }
 
     function getControlHost() {
+        const fullscreenButton = findFullscreenButton();
+        if (fullscreenButton) {
+            if (typeof fullscreenButton.closest === 'function') {
+                const buttonsHost = fullscreenButton.closest('.buttons');
+                if (buttonsHost) {
+                    return buttonsHost;
+                }
+            }
+
+            if (fullscreenButton.parentElement) {
+                return fullscreenButton.parentElement;
+            }
+        }
+
         return document.querySelector('.videoOsdBottom .buttons')
             || document.querySelector('.videoOsdBottom .videoOsdBottomButtons')
             || document.querySelector('.videoOsdBottom .osdControls')
+            || document.querySelector('.buttons')
             || document.querySelector('[class*="videoOsd"] [class*="buttons"]')
             || document.querySelector('[class*="videoOsd"] [class*="controls"]');
     }
@@ -178,6 +193,8 @@
         button.style.border = '0';
         button.style.fontSize = '0.9rem';
         button.style.cursor = 'pointer';
+        button.style.minWidth = '2.4rem';
+        button.style.minHeight = '2.4rem';
         button.setAttribute('aria-controls', panelId);
         button.setAttribute('aria-expanded', 'false');
         button.addEventListener('click', function () {
@@ -796,15 +813,39 @@
     }
 
     function findFullscreenButton(controlHost) {
-        if (!controlHost) {
-            return null;
+        if (controlHost) {
+            return controlHost.querySelector('.btnFullscreen');
         }
 
-        return controlHost.querySelector('.btnFullscreen');
+        return document.querySelector('.videoOsdBottom .buttons .btnFullscreen')
+            || document.querySelector('.buttons .btnFullscreen')
+            || document.querySelector('.btnFullscreen');
+    }
+
+    function syncButtonStyleWithFullscreen(button, fullscreenButton) {
+        if (!fullscreenButton) {
+            return;
+        }
+
+        const classNames = [];
+        fullscreenButton.classList.forEach(function (className) {
+            if (className !== 'btnFullscreen' && className !== markerClass) {
+                classNames.push(className);
+            }
+        });
+
+        if (classNames.indexOf('emby-button') === -1) {
+            classNames.push('emby-button');
+        }
+
+        classNames.push(markerClass);
+        button.className = classNames.join(' ');
     }
 
     function placeChatButton(controlHost, button) {
         const fullscreenButton = findFullscreenButton(controlHost);
+        syncButtonStyleWithFullscreen(button, fullscreenButton);
+
         if (fullscreenButton && fullscreenButton.parentElement === controlHost) {
             if (button.parentElement === controlHost && fullscreenButton.nextElementSibling === button) {
                 return;
