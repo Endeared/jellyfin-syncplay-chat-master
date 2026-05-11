@@ -6,7 +6,7 @@
     }
 
     window.__syncPlayChatLoaded = true;
-    window.__syncPlayChatVersion = '1.0.1.10-mobile-chat-layout';
+    window.__syncPlayChatVersion = '1.0.1.9-mobile-chat-layout';
 
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
