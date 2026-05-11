@@ -6,7 +6,7 @@
     }
 
     window.__syncPlayChatLoaded = true;
-    window.__syncPlayChatVersion = '1.0.1.9-playback-event-only';
+    window.__syncPlayChatVersion = '1.0.1.10-mobile-chat-layout';
 
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
@@ -987,49 +987,8 @@
         return overlayButton;
     }
 
-    function getPlaybackVideoElements() {
-        const videos = [];
-        [
-            '.videoPlayerContainer video',
-            '[class*="videoPlayerContainer"] video',
-            '.htmlvideoplayer video',
-            'video.htmlvideoplayer'
-        ].forEach(function (selector) {
-            Array.prototype.slice.call(document.querySelectorAll(selector)).forEach(function (video) {
-                if (videos.indexOf(video) === -1) {
-                    videos.push(video);
-                }
-            });
-        });
-
-        return videos;
-    }
-
-    function watchPlaybackVideo(video) {
-        if (!video || video.__syncPlayChatReadyWatcher) {
-            return;
-        }
-
-        video.__syncPlayChatReadyWatcher = true;
-        ['loadeddata', 'canplay', 'playing'].forEach(function (eventName) {
-            video.addEventListener(eventName, scheduleAddButton, { passive: true });
-        });
-    }
-
-    function isVideoElementReady(video) {
-        if (!video) {
-            return false;
-        }
-
-        const haveCurrentData = typeof video.HAVE_CURRENT_DATA === 'number' ? video.HAVE_CURRENT_DATA : 2;
-        return typeof video.readyState === 'number' && video.readyState >= haveCurrentData;
-    }
-
     function isPlaybackActive() {
-        return getPlaybackVideoElements().some(function (video) {
-            watchPlaybackVideo(video);
-            return isVideoElementReady(video);
-        });
+        return !!document.querySelector('.videoPlayerContainer, [class*="videoPlayerContainer"], .htmlvideoplayer');
     }
 
     function getCurrentUserId() {
@@ -2072,7 +2031,10 @@
 
         const shouldShowChatUi = isPlaybackActive();
         if (!shouldShowChatUi) {
-            removeChatUiArtifacts();
+            hideChatPanel();
+            Array.prototype.slice.call(document.querySelectorAll('.' + markerClass)).forEach(function (button) {
+                button.remove();
+            });
             return;
         }
 
@@ -2092,35 +2054,6 @@
         window.requestAnimationFrame(addButton);
     }
 
-    function hasChatUiArtifacts() {
-        return chatPanelVisible
-            || bodyLayoutAdjusted
-            || !!document.getElementById(panelId)
-            || !!document.getElementById(floatingHostId)
-            || !!document.querySelector('.' + markerClass);
-    }
-
-    function removeChatUiArtifacts() {
-        if (!hasChatUiArtifacts()) {
-            return;
-        }
-
-        hideChatPanel();
-        Array.prototype.slice.call(document.querySelectorAll('.' + markerClass)).forEach(function (button) {
-            button.remove();
-        });
-
-        const panel = document.getElementById(panelId);
-        if (panel) {
-            panel.remove();
-        }
-
-        const host = document.getElementById(floatingHostId);
-        if (host && host.children.length === 0) {
-            host.remove();
-        }
-    }
-
     function start() {
         if (!document.body) {
             return;
@@ -2132,6 +2065,7 @@
         observer.observe(document.body, { childList: true, subtree: true });
 
         addButton();
+        window.setInterval(scheduleAddButton, 500);
         window.setInterval(pollChatMessages, messagePollIntervalMs);
         window.addEventListener('resize', function () {
             applyDocumentLayout();
