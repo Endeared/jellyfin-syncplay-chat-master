@@ -16,7 +16,7 @@ public class SyncPlayChatSendRequest
     public string? SenderSessionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the toast header.
+    /// Gets or sets a legacy message header value.
     /// </summary>
     public string? Header { get; set; }
 
@@ -26,7 +26,7 @@ public class SyncPlayChatSendRequest
     public string? Text { get; set; }
 
     /// <summary>
-    /// Gets or sets the toast timeout in milliseconds.
+    /// Gets or sets a legacy message timeout value.
     /// </summary>
     public int? TimeoutMs { get; set; }
 

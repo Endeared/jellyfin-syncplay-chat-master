@@ -6,17 +6,17 @@ namespace Jellyfin.Plugin.SyncPlayChat.Api;
 public class SyncPlayChatSendResponse
 {
     /// <summary>
-    /// Gets or sets total attempted session sends.
+    /// Gets or sets total attempted chat message writes.
     /// </summary>
     public int Attempted { get; set; }
 
     /// <summary>
-    /// Gets or sets number of successful session sends.
+    /// Gets or sets number of successful chat message writes.
     /// </summary>
     public int Sent { get; set; }
 
     /// <summary>
-    /// Gets or sets number of failed session sends.
+    /// Gets or sets number of failed chat message writes.
     /// </summary>
     public int Failed { get; set; }
 }

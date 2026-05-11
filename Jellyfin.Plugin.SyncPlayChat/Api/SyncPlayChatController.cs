@@ -1,12 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
-using MediaBrowser.Common.Api;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Controller.SyncPlay.Requests;
@@ -26,32 +23,32 @@ namespace Jellyfin.Plugin.SyncPlayChat.Api;
 [Authorize]
 public class SyncPlayChatController : ControllerBase
 {
+    private const int MaxMessagesPerGroup = 200;
+    private static readonly ConcurrentDictionary<string, List<SyncPlayChatMessage>> _messagesByGroup = new(StringComparer.Ordinal);
+
     private readonly ISessionManager _sessionManager;
-    private readonly IUserManager _userManager;
     private readonly ISyncPlayManager _syncPlayManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SyncPlayChatController"/> class.
     /// </summary>
     /// <param name="sessionManager">The Jellyfin session manager.</param>
-    /// <param name="userManager">The Jellyfin user manager.</param>
     /// <param name="syncPlayManager">The Jellyfin SyncPlay manager.</param>
-    public SyncPlayChatController(ISessionManager sessionManager, IUserManager userManager, ISyncPlayManager syncPlayManager)
+    public SyncPlayChatController(ISessionManager sessionManager, ISyncPlayManager syncPlayManager)
     {
         _sessionManager = sessionManager;
-        _userManager = userManager;
         _syncPlayManager = syncPlayManager;
     }
 
     /// <summary>
-    /// Sends a chat toast to sessions in the caller's SyncPlay group.
+    /// Stores a chat message for the caller's SyncPlay group.
     /// </summary>
     /// <param name="request">The send request payload.</param>
     /// <returns>The send result.</returns>
     [HttpPost("Send")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<SyncPlayChatSendResponse>> Send([FromBody, Required] SyncPlayChatSendRequest request)
+    public ActionResult<SyncPlayChatSendResponse> Send([FromBody, Required] SyncPlayChatSendRequest request)
     {
         if (request is null)
         {
@@ -63,9 +60,6 @@ public class SyncPlayChatController : ControllerBase
         {
             return BadRequest("Text is required.");
         }
-
-        string header = string.IsNullOrWhiteSpace(request.Header) ? "SyncPlay Chat" : request.Header.Trim();
-        int timeoutMs = request.TimeoutMs is > 0 ? request.TimeoutMs.Value : 4000;
 
         Guid userId = ResolveCurrentUserId();
         if (userId == Guid.Empty)
@@ -80,10 +74,7 @@ public class SyncPlayChatController : ControllerBase
             return BadRequest("Current session not found.");
         }
 
-        string controllingSessionId = controllingSession.Id;
-
         var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
-
         var participantHints = ParseParticipantHints(request.ParticipantsCsv);
         var targetGroup = ResolveTargetGroup(visibleGroups, request.GroupId, participantHints);
         if (targetGroup is null)
@@ -96,138 +87,70 @@ public class SyncPlayChatController : ControllerBase
             });
         }
 
-        var allowedSessionIds = ResolveAllowedSessionIds(request, allSessions, controllingSessionId, targetGroup);
-        if (allowedSessionIds.Count == 0)
+        string groupId = targetGroup.GroupId.ToString("D");
+        AddMessage(new SyncPlayChatMessage
         {
-            return Ok(new SyncPlayChatSendResponse
-            {
-                Attempted = 0,
-                Sent = 0,
-                Failed = 0
-            });
-        }
-
-        var command = new MessageCommand
-        {
-            Header = header,
+            Id = Guid.NewGuid().ToString("N"),
+            GroupId = groupId,
+            UserName = ResolveSenderName(controllingSession),
             Text = text,
-            TimeoutMs = timeoutMs
-        };
-
-        int sent = 0;
-        int failed = 0;
-
-        foreach (var sessionId in allowedSessionIds)
-        {
-            try
-            {
-                await _sessionManager.SendMessageCommand(
-                    controllingSessionId,
-                    sessionId,
-                    command,
-                    CancellationToken.None).ConfigureAwait(false);
-                sent++;
-            }
-            catch
-            {
-                failed++;
-            }
-        }
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
 
         return Ok(new SyncPlayChatSendResponse
         {
-            Attempted = allowedSessionIds.Count,
-            Sent = sent,
-            Failed = failed
+            Attempted = 1,
+            Sent = 1,
+            Failed = 0
         });
     }
 
-    private static List<string> ResolveAllowedSessionIds(
-        SyncPlayChatSendRequest request,
-        List<SessionInfo> allSessions,
-        string controllingSessionId,
-        GroupInfoDto targetGroup)
+    /// <summary>
+    /// Gets chat messages for the caller's SyncPlay group.
+    /// </summary>
+    /// <param name="groupId">The preferred SyncPlay group identifier.</param>
+    /// <param name="senderSessionId">The sender session identifier from the web client.</param>
+    /// <param name="participantsCsv">Comma-separated participant hints from group payloads.</param>
+    /// <returns>The chat messages for the resolved SyncPlay group.</returns>
+    [HttpGet("Messages")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<SyncPlayChatMessagesResponse> Messages(
+        [FromQuery] string? groupId,
+        [FromQuery] string? senderSessionId,
+        [FromQuery] string? participantsCsv)
     {
-        var result = new List<string>();
-        var sessionById = allSessions
-            .Where(static s => !string.IsNullOrWhiteSpace(s.Id))
-            .GroupBy(static s => s.Id, StringComparer.Ordinal)
-            .ToDictionary(static g => g.Key, static g => g.First(), StringComparer.Ordinal);
-
-        if (sessionById.TryGetValue(controllingSessionId, out var controllingSession)
-            && controllingSession.UserId != Guid.Empty)
+        Guid userId = ResolveCurrentUserId();
+        if (userId == Guid.Empty)
         {
-            foreach (var session in allSessions)
+            return BadRequest("Could not resolve current user id.");
+        }
+
+        var allSessions = _sessionManager.Sessions.ToList();
+        var controllingSession = ResolveControllingSession(allSessions, userId, senderSessionId);
+        if (controllingSession is null)
+        {
+            return BadRequest("Current session not found.");
+        }
+
+        var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
+        var participantHints = ParseParticipantHints(participantsCsv);
+        var targetGroup = ResolveTargetGroup(visibleGroups, groupId, participantHints);
+        if (targetGroup is null)
+        {
+            return Ok(new SyncPlayChatMessagesResponse
             {
-                if (string.IsNullOrWhiteSpace(session.Id))
-                {
-                    continue;
-                }
-
-                if (session.UserId == controllingSession.UserId)
-                {
-                    AddIfMissing(result, session.Id);
-                }
-            }
+                GroupId = groupId ?? string.Empty,
+                Messages = []
+            });
         }
 
-        if (!string.IsNullOrWhiteSpace(request.SenderSessionId)
-            && sessionById.TryGetValue(request.SenderSessionId, out var senderSession)
-            && senderSession.UserId != Guid.Empty)
+        string resolvedGroupId = targetGroup.GroupId.ToString("D");
+        return Ok(new SyncPlayChatMessagesResponse
         {
-            foreach (var session in allSessions)
-            {
-                if (string.IsNullOrWhiteSpace(session.Id))
-                {
-                    continue;
-                }
-
-                if (session.UserId == senderSession.UserId)
-                {
-                    AddIfMissing(result, session.Id);
-                }
-            }
-        }
-
-        var participantSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var participant in targetGroup.Participants)
-        {
-            if (!string.IsNullOrWhiteSpace(participant))
-            {
-                participantSet.Add(participant.Trim());
-            }
-        }
-
-        foreach (var participant in ParseParticipantHints(request.ParticipantsCsv))
-        {
-            if (!string.IsNullOrWhiteSpace(participant))
-            {
-                participantSet.Add(participant.Trim());
-            }
-        }
-
-        if (participantSet.Count > 0)
-        {
-            foreach (var session in allSessions)
-            {
-                if (string.IsNullOrWhiteSpace(session.Id))
-                {
-                    continue;
-                }
-
-                if (MatchesParticipant(session, participantSet))
-                {
-                    AddIfMissing(result, session.Id);
-                }
-            }
-        }
-
-        if (result.Count == 0)
-        {
-            AddIfMissing(result, controllingSessionId);
-        }
-
-        return result;
+            GroupId = resolvedGroupId,
+            Messages = GetMessages(resolvedGroupId)
+        });
     }
 
     private static GroupInfoDto? ResolveTargetGroup(List<GroupInfoDto> groups, string? requestedGroupId, List<string> participants)
@@ -263,6 +186,32 @@ public class SyncPlayChatController : ControllerBase
         return groups[0];
     }
 
+    private static void AddMessage(SyncPlayChatMessage message)
+    {
+        var messages = _messagesByGroup.GetOrAdd(message.GroupId, static _ => []);
+        lock (messages)
+        {
+            messages.Add(message);
+            while (messages.Count > MaxMessagesPerGroup)
+            {
+                messages.RemoveAt(0);
+            }
+        }
+    }
+
+    private static List<SyncPlayChatMessage> GetMessages(string groupId)
+    {
+        if (!_messagesByGroup.TryGetValue(groupId, out var messages))
+        {
+            return [];
+        }
+
+        lock (messages)
+        {
+            return messages.ToList();
+        }
+    }
+
     private static List<string> ParseParticipantHints(string? participantsCsv)
     {
         if (string.IsNullOrWhiteSpace(participantsCsv))
@@ -277,47 +226,19 @@ public class SyncPlayChatController : ControllerBase
             .ToList();
     }
 
-    private static bool MatchesParticipant(SessionInfo session, HashSet<string> participants)
+    private static string ResolveSenderName(SessionInfo session)
     {
-        if (participants.Count == 0)
+        if (!string.IsNullOrWhiteSpace(session.UserName))
         {
-            return false;
+            return session.UserName;
         }
 
-        if (!string.IsNullOrWhiteSpace(session.UserName) && participants.Contains(session.UserName))
+        if (!string.IsNullOrWhiteSpace(session.DeviceName))
         {
-            return true;
+            return session.DeviceName;
         }
 
-        if (!string.IsNullOrWhiteSpace(session.DeviceName) && participants.Contains(session.DeviceName))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(session.DeviceId) && participants.Contains(session.DeviceId))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(session.Client) && participants.Contains(session.Client))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static void AddIfMissing(List<string> values, string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return;
-        }
-
-        if (!values.Contains(value, StringComparer.Ordinal))
-        {
-            values.Add(value);
-        }
+        return "Someone";
     }
 
     private Guid ResolveCurrentUserId()

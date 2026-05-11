@@ -6,14 +6,24 @@
     const floatingHostId = 'syncPlayChatFloatingHost';
     const panelId = 'syncPlayChatPanel';
     const messagesId = 'syncPlayChatMessages';
+    const statusId = 'syncPlayChatStatus';
     const inputId = 'syncPlayChatInput';
     const sendButtonId = 'syncPlayChatSendButton';
-    const chatToastHeader = 'SyncPlay Chat';
     const refreshIntervalMs = 5000;
+    const messagePollIntervalMs = 2000;
     const maxVisibleMessages = 100;
+    const sidebarWidthPx = 300;
+    const storagePrefix = 'syncPlayChatMessages:';
     let shouldShowButton = false;
     let refreshInProgress = false;
     let sendInProgress = false;
+    let messagePollInProgress = false;
+    let chatPanelVisible = false;
+    let bodyLayoutAdjusted = false;
+    let originalBodyPaddingRight = '';
+    let baseBodyPaddingRight = '0px';
+    let lastChatContext = null;
+    let lastRenderedGroupId = '';
 
     function normalizeId(value) {
         if (value === null || value === undefined) {
@@ -74,15 +84,41 @@
         const mobile = isMobileViewport();
         host.style.flexDirection = 'column';
         host.style.top = mobile ? '0.75rem' : 'auto';
-        host.style.right = mobile ? '0.75rem' : '1rem';
+        host.style.right = mobile || !chatPanelVisible ? '1rem' : 'calc(1rem + ' + sidebarWidthPx + 'px)';
         host.style.bottom = mobile ? 'auto' : '1rem';
-        host.style.left = mobile ? '0.75rem' : 'auto';
+        host.style.left = mobile ? '1rem' : 'auto';
         host.style.alignItems = mobile ? 'stretch' : 'flex-end';
         host.style.maxWidth = mobile ? 'none' : 'calc(100vw - 2rem)';
 
         const panel = document.getElementById(panelId);
         if (panel) {
             applyChatPanelLayout(panel);
+        }
+    }
+
+    function applyDocumentLayout() {
+        if (!document.body) {
+            return;
+        }
+
+        const shouldAdjustBody = chatPanelVisible && !isMobileViewport();
+        if (shouldAdjustBody && !bodyLayoutAdjusted) {
+            originalBodyPaddingRight = document.body.style.paddingRight || '';
+            baseBodyPaddingRight = window.getComputedStyle(document.body).paddingRight || '0px';
+            bodyLayoutAdjusted = true;
+        }
+
+        if (shouldAdjustBody) {
+            document.body.style.boxSizing = 'border-box';
+            document.body.style.paddingRight = 'calc(' + baseBodyPaddingRight + ' + ' + sidebarWidthPx + 'px)';
+        } else if (bodyLayoutAdjusted) {
+            document.body.style.paddingRight = originalBodyPaddingRight;
+            bodyLayoutAdjusted = false;
+        }
+
+        const host = document.getElementById(floatingHostId);
+        if (host) {
+            applyFloatingHostLayout(host);
         }
     }
 
@@ -118,14 +154,16 @@
         const panel = document.createElement('div');
         panel.id = panelId;
         panel.style.display = 'none';
+        panel.style.position = 'fixed';
         panel.style.flexDirection = 'column';
         panel.style.gap = '0.55rem';
         panel.style.padding = '0.65rem';
-        panel.style.borderRadius = '0.75rem';
-        panel.style.background = 'rgba(0, 0, 0, 0.82)';
+        panel.style.background = 'rgba(0, 0, 0, 0.92)';
         panel.style.border = '1px solid rgba(255, 255, 255, 0.25)';
-        panel.style.boxShadow = '0 0.75rem 2rem rgba(0, 0, 0, 0.4)';
+        panel.style.boxShadow = '-0.4rem 0 1.5rem rgba(0, 0, 0, 0.45)';
         panel.style.color = '#fff';
+        panel.style.boxSizing = 'border-box';
+        panel.style.zIndex = '99998';
         applyChatPanelLayout(panel);
 
         const header = document.createElement('div');
@@ -161,11 +199,18 @@
         messages.style.display = 'flex';
         messages.style.flexDirection = 'column';
         messages.style.gap = '0.5rem';
+        messages.style.flex = '1 1 auto';
         messages.style.minHeight = '6rem';
         messages.style.overflowY = 'auto';
         messages.style.padding = '0.35rem';
         messages.style.borderRadius = '0.55rem';
         messages.style.background = 'rgba(255, 255, 255, 0.08)';
+
+        const status = document.createElement('div');
+        status.id = statusId;
+        status.style.minHeight = '1rem';
+        status.style.fontSize = '0.78rem';
+        status.style.opacity = '0.8';
 
         const composer = document.createElement('div');
         composer.style.display = 'flex';
@@ -238,6 +283,7 @@
         composer.appendChild(sendButton);
         panel.appendChild(header);
         panel.appendChild(messages);
+        panel.appendChild(status);
         panel.appendChild(composer);
         applyChatPanelLayout(panel);
         return panel;
@@ -245,13 +291,19 @@
 
     function applyChatPanelLayout(panel) {
         const mobile = isMobileViewport();
-        panel.style.width = mobile ? 'auto' : '22rem';
-        panel.style.maxWidth = mobile ? 'none' : 'calc(100vw - 2rem)';
-        panel.style.maxHeight = mobile ? '45vh' : 'min(65vh, 32rem)';
+        panel.style.top = '0';
+        panel.style.right = '0';
+        panel.style.left = mobile ? '0' : 'auto';
+        panel.style.bottom = mobile ? 'auto' : '0';
+        panel.style.width = mobile ? 'auto' : sidebarWidthPx + 'px';
+        panel.style.height = mobile ? '45vh' : '100vh';
+        panel.style.maxWidth = mobile ? 'none' : sidebarWidthPx + 'px';
+        panel.style.maxHeight = mobile ? '45vh' : '100vh';
+        panel.style.borderRadius = mobile ? '0 0 0.75rem 0.75rem' : '0';
 
         const messages = document.getElementById(messagesId);
         if (messages) {
-            messages.style.maxHeight = mobile ? '24vh' : '20rem';
+            messages.style.maxHeight = mobile ? '24vh' : 'none';
         }
     }
 
@@ -300,6 +352,9 @@
             panel.style.display = 'none';
         }
 
+        chatPanelVisible = false;
+        applyDocumentLayout();
+
         const button = document.getElementById(buttonId);
         if (button) {
             button.style.opacity = '1';
@@ -316,7 +371,10 @@
         const panel = getOrCreateChatPanel(host);
 
         panel.style.display = 'flex';
+        chatPanelVisible = true;
+        applyDocumentLayout();
         scrollMessagesToBottom();
+        pollChatMessages();
 
         const chatButton = button || document.getElementById(buttonId);
         if (chatButton) {
@@ -333,34 +391,6 @@
         }
     }
 
-    function parseChatMessagePayload(text) {
-        const raw = typeof text === 'string' ? text.trim() : '';
-        const separatorIndex = raw.indexOf(': ');
-        if (separatorIndex > 0 && separatorIndex <= 64) {
-            return {
-                sender: raw.slice(0, separatorIndex).trim(),
-                message: raw.slice(separatorIndex + 2).trim()
-            };
-        }
-
-        return {
-            sender: 'Someone',
-            message: raw
-        };
-    }
-
-    function isSyncPlayChatPayload(text, title) {
-        if (title !== chatToastHeader || typeof text !== 'string') {
-            return false;
-        }
-
-        const raw = text.trim();
-        const separatorIndex = raw.indexOf(': ');
-        return separatorIndex > 0
-            && separatorIndex <= 64
-            && raw.slice(separatorIndex + 2).trim().length > 0;
-    }
-
     function scrollMessagesToBottom() {
         const messages = document.getElementById(messagesId);
         if (messages) {
@@ -368,20 +398,7 @@
         }
     }
 
-    function appendChatMessage(sender, message) {
-        if (!message) {
-            return;
-        }
-
-        const host = getFloatingHost();
-        getOrCreateChatPanel(host);
-
-        const messages = document.getElementById(messagesId);
-        if (!messages) {
-            return;
-        }
-
-        const wasNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
+    function createMessageRow(chatMessage) {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.flexDirection = 'column';
@@ -391,13 +408,13 @@
         row.style.background = 'rgba(0, 0, 0, 0.28)';
 
         const senderElement = document.createElement('div');
-        senderElement.textContent = sender || 'Someone';
+        senderElement.textContent = chatMessage.userName || chatMessage.UserName || 'Someone';
         senderElement.style.fontWeight = '600';
         senderElement.style.fontSize = '0.78rem';
         senderElement.style.opacity = '0.85';
 
         const messageElement = document.createElement('div');
-        messageElement.textContent = message;
+        messageElement.textContent = chatMessage.text || chatMessage.Text || '';
         messageElement.style.fontSize = '0.9rem';
         messageElement.style.lineHeight = '1.25rem';
         messageElement.style.whiteSpace = 'pre-wrap';
@@ -405,20 +422,112 @@
 
         row.appendChild(senderElement);
         row.appendChild(messageElement);
-        messages.appendChild(row);
+        return row;
+    }
 
-        while (messages.children.length > maxVisibleMessages) {
-            messages.removeChild(messages.firstChild);
+    function normalizeChatMessages(response) {
+        let normalized = response;
+        if (typeof normalized === 'string') {
+            try {
+                normalized = JSON.parse(normalized);
+            } catch (parseError) {
+                logDebug('Failed to parse chat messages response JSON', parseError);
+                return [];
+            }
         }
+
+        if (normalized && typeof normalized === 'object' && normalized.responseJSON && typeof normalized.responseJSON === 'object') {
+            normalized = normalized.responseJSON;
+        }
+
+        if (Array.isArray(normalized)) {
+            return normalized;
+        }
+
+        if (normalized && Array.isArray(normalized.Messages)) {
+            return normalized.Messages;
+        }
+
+        if (normalized && Array.isArray(normalized.messages)) {
+            return normalized.messages;
+        }
+
+        return [];
+    }
+
+    function getMessageId(chatMessage) {
+        return chatMessage.id || chatMessage.Id || '';
+    }
+
+    function getMessageStorageKey(groupId) {
+        return storagePrefix + (groupId || 'unknown');
+    }
+
+    function saveMessagesToStorage(groupId, messages) {
+        if (!window.localStorage || !groupId) {
+            return;
+        }
+
+        try {
+            window.localStorage.setItem(getMessageStorageKey(groupId), JSON.stringify(messages.slice(-maxVisibleMessages)));
+        } catch (storageError) {
+            logDebug('Failed to save SyncPlay chat messages', storageError);
+        }
+    }
+
+    function loadMessagesFromStorage(groupId) {
+        if (!window.localStorage || !groupId) {
+            return [];
+        }
+
+        try {
+            const raw = window.localStorage.getItem(getMessageStorageKey(groupId));
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (storageError) {
+            logDebug('Failed to load SyncPlay chat messages', storageError);
+            return [];
+        }
+    }
+
+    function renderChatMessages(groupId, messages) {
+        const host = getFloatingHost();
+        getOrCreateChatPanel(host);
+
+        const container = document.getElementById(messagesId);
+        if (!container) {
+            return;
+        }
+
+        const visibleMessages = messages.slice(-maxVisibleMessages);
+        const nextIds = visibleMessages.map(getMessageId).join('|');
+        if (groupId === lastRenderedGroupId && container.getAttribute('data-sync-play-chat-message-ids') === nextIds) {
+            return;
+        }
+
+        const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        visibleMessages.forEach(function (message) {
+            container.appendChild(createMessageRow(message));
+        });
+
+        container.setAttribute('data-sync-play-chat-message-ids', nextIds);
+        lastRenderedGroupId = groupId || '';
+        saveMessagesToStorage(groupId, visibleMessages);
 
         if (wasNearBottom) {
             scrollMessagesToBottom();
         }
     }
 
-    function appendChatMessagePayload(text) {
-        const parsed = parseChatMessagePayload(text);
-        appendChatMessage(parsed.sender, parsed.message);
+    function showChatStatus(text) {
+        const status = document.getElementById(statusId);
+        if (status) {
+            status.textContent = text || '';
+        }
     }
 
     function getComposerMessageText() {
@@ -1199,57 +1308,9 @@
         return matchedIdentityInDetails;
     }
 
-    function installChatMessageInterceptors() {
-        if (window.toastr
-            && typeof window.toastr.info === 'function'
-            && !window.toastr.info.__syncPlayChatWrapped) {
-            const originalInfo = window.toastr.info;
-            const wrappedInfo = function (text, title) {
-                if (isSyncPlayChatPayload(text, title)) {
-                    appendChatMessagePayload(text);
-                    return null;
-                }
-
-                return originalInfo.apply(this, arguments);
-            };
-            wrappedInfo.__syncPlayChatWrapped = true;
-            window.toastr.info = wrappedInfo;
-        }
-
-        if (window.Dashboard
-            && typeof window.Dashboard.alert === 'function'
-            && !window.Dashboard.alert.__syncPlayChatWrapped) {
-            const originalAlert = window.Dashboard.alert;
-            const wrappedAlert = function (options) {
-                if (options && isSyncPlayChatPayload(options.message, options.title)) {
-                    appendChatMessagePayload(options.message);
-                    return null;
-                }
-
-                return originalAlert.apply(this, arguments);
-            };
-            wrappedAlert.__syncPlayChatWrapped = true;
-            window.Dashboard.alert = wrappedAlert;
-        }
-    }
-
-    function showLocalToast(text, title) {
-        installChatMessageInterceptors();
-
-        if (window.toastr && typeof window.toastr.info === 'function') {
-            window.toastr.info(text, title || chatToastHeader);
-            return;
-        }
-
-        if (window.Dashboard && typeof window.Dashboard.alert === 'function') {
-            window.Dashboard.alert({
-                title: title || chatToastHeader,
-                message: text
-            });
-            return;
-        }
-
-        logDebug('Toast fallback', { title: title || chatToastHeader, text: text });
+    function showLocalToast(text) {
+        showChatStatus(text);
+        logDebug('SyncPlay chat status', text);
     }
 
     function extractParticipantsFromGroups(groups) {
@@ -1285,14 +1346,89 @@
         return participants;
     }
 
-    async function sendMessageViaServer(text, senderSessionId, groupId, participants) {
+    async function resolveChatContext() {
+        const sessions = await fetchSessions();
+        const groupsResponse = await fetchJson('SyncPlay/List');
+        const groups = normalizeGroupsResponse(groupsResponse);
+        const currentSession = getCurrentSession(sessions);
+        const groupIds = getGroupIdsForCurrentUserSessions(sessions);
+        const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
+        const relevantGroups = groups.filter(function (group) {
+            return groupsContainCurrentUser([group], sessions);
+        });
+        let groupsForDetailLookup = [];
+
+        if (groupsBySessionGroupIds.length > 0) {
+            groupsForDetailLookup = groupsBySessionGroupIds;
+        } else if (relevantGroups.length > 0) {
+            groupsForDetailLookup = relevantGroups;
+        } else if (groups.length === 1) {
+            groupsForDetailLookup = [groups[0]];
+        }
+
+        const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForDetailLookup[0] || groups[0]);
+        const context = {
+            groupId: preferredGroupId || '',
+            senderSessionId: currentSession && currentSession.Id,
+            participants: extractParticipantsFromGroups(groupsForDetailLookup.length > 0 ? groupsForDetailLookup : groups)
+        };
+        lastChatContext = context;
+        return context;
+    }
+
+    function buildChatQuery(context) {
+        const query = [];
+        if (context && context.groupId) {
+            query.push('groupId=' + encodeURIComponent(context.groupId));
+        }
+
+        if (context && context.senderSessionId) {
+            query.push('senderSessionId=' + encodeURIComponent(context.senderSessionId));
+        }
+
+        if (context && context.participants && context.participants.length) {
+            query.push('participantsCsv=' + encodeURIComponent(context.participants.join(',')));
+        }
+
+        return query.length > 0 ? '?' + query.join('&') : '';
+    }
+
+    async function fetchChatMessages(context) {
+        const response = await fetchJson('SyncPlayChat/Messages' + buildChatQuery(context));
+        return normalizeChatMessages(response);
+    }
+
+    async function pollChatMessages() {
+        if (messagePollInProgress || !shouldShowButton) {
+            return;
+        }
+
+        messagePollInProgress = true;
+        try {
+            const context = lastChatContext || await resolveChatContext();
+            if (context.groupId) {
+                const storedMessages = loadMessagesFromStorage(context.groupId);
+                if (storedMessages.length > 0) {
+                    renderChatMessages(context.groupId, storedMessages);
+                }
+            }
+
+            const messages = await fetchChatMessages(context);
+            renderChatMessages(context.groupId, messages);
+            showChatStatus('');
+        } catch (err) {
+            logDebug('Failed to poll SyncPlay chat messages', err);
+        } finally {
+            messagePollInProgress = false;
+        }
+    }
+
+    async function sendMessageViaServer(text, context) {
         const response = await postJson('SyncPlayChat/Send', {
-            GroupId: groupId || '',
-            SenderSessionId: senderSessionId || '',
-            Header: chatToastHeader,
+            GroupId: context.groupId || '',
+            SenderSessionId: context.senderSessionId || '',
             Text: text,
-            TimeoutMs: 4000,
-            ParticipantsCsv: (participants || []).join(',')
+            ParticipantsCsv: (context.participants || []).join(',')
         }, true);
 
         let normalized = response;
@@ -1342,48 +1478,14 @@
         setComposerBusy(true);
 
         try {
-            const sessions = await fetchSessions();
-            const groupsResponse = await fetchJson('SyncPlay/List');
-            const groups = normalizeGroupsResponse(groupsResponse);
-
-            const currentSession = getCurrentSession(sessions);
-            const senderName = (currentSession && currentSession.UserName)
-                || (currentSession && currentSession.User && currentSession.User.Name)
-                || getCurrentUserName()
-                || 'Someone';
-            const messageText = senderName + ': ' + trimmedText;
-
-            const groupIds = getGroupIdsForCurrentUserSessions(sessions);
-            const sessionIdsFromSessionGroup = findSessionIdsByGroupIds(sessions, groupIds);
-            const sessionIdsFromGroupPayload = findSessionIdsInGroupPayload(groups, sessions);
-            const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
-            const relevantGroups = groups.filter(function (group) {
-                return groupsContainCurrentUser([group], sessions);
-            });
-            let groupsForDetailLookup = [];
-
-            if (groupsBySessionGroupIds.length > 0) {
-                groupsForDetailLookup = groupsBySessionGroupIds;
-            } else if (relevantGroups.length > 0) {
-                groupsForDetailLookup = relevantGroups;
-            } else if (groups.length === 1) {
-                groupsForDetailLookup = [groups[0]];
-            }
-
-            const participantsForSend = extractParticipantsFromGroups(groupsForDetailLookup.length > 0 ? groupsForDetailLookup : groups);
-            let result;
-            const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForDetailLookup[0] || groups[0]);
-            result = await sendMessageViaServer(
-                messageText,
-                currentSession && currentSession.Id,
-                preferredGroupId,
-                participantsForSend);
+            const context = await resolveChatContext();
+            const result = await sendMessageViaServer(trimmedText, context);
 
             logDebug('Sync chat send result', result);
 
             if (result && result.sent > 0) {
                 clearComposerInput();
-                scrollMessagesToBottom();
+                await pollChatMessages();
             } else {
                 showLocalToast('Failed to send SyncPlay chat message.');
             }
@@ -1488,6 +1590,12 @@
 
         try {
             shouldShowButton = await isCurrentUserInSyncPlayGroup();
+            if (!shouldShowButton) {
+                lastChatContext = null;
+                lastRenderedGroupId = '';
+            } else {
+                lastChatContext = null;
+            }
         } catch (err) {
             logDebug('Failed to refresh SyncPlay state', err);
             return;
@@ -1539,15 +1647,15 @@
         }
 
         window.__syncPlayChatLoaded = true;
-        installChatMessageInterceptors();
 
         const observer = new MutationObserver(addButton);
         observer.observe(document.body, { childList: true, subtree: true });
 
         refreshSyncPlayState();
         window.setInterval(refreshSyncPlayState, refreshIntervalMs);
-        window.setInterval(installChatMessageInterceptors, 1000);
+        window.setInterval(pollChatMessages, messagePollIntervalMs);
         window.addEventListener('resize', function () {
+            applyDocumentLayout();
             applyFloatingHostLayout(getFloatingHost());
         });
         window.addEventListener('focus', refreshSyncPlayState);
